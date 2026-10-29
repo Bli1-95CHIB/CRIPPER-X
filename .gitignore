@@ -1,0 +1,13 @@
+cat > .gitignore << 'EOF'
+private.pem
+*.pem
+!cripper.pub
+cripper
+cripper.sig
+cripper.sha256
+cripper_patched.py
+tmp_pub.pem
+Cripper-X_Data/
+__pycache__/
+*.pyc
+EOF
