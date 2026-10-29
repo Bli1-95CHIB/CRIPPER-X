@@ -311,9 +311,13 @@ def safe_read_text(path, max_size=MAX_FILE_BYTES):
 
 
 def scrape_url(url, timeout=10):
+    """Fetch and extract text. Wall-clock deadline defeats slow-trickle servers."""
     try:
+        # Use a real Chrome User-Agent to bypass bot blockers
         req = urllib.request.Request(url, headers={
-            'User-Agent': f'cripper-x/{VERSION} (+https://github.com/{GITHUB_REPO})',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5'
         })
         buf = bytearray()
         deadline = time.time() + MAX_SCRAPE_SECONDS
@@ -323,10 +327,20 @@ def scrape_url(url, timeout=10):
                 if not chunk:
                     break
                 buf.extend(chunk)
-        html = bytes(buf).decode('utf-8', errors='ignore')
-        parser = HTMLTextExtractor()
-        parser.feed(html)
-        return re.sub(r'\s+', ' ', parser.get_text())
+                
+        raw_html = bytes(buf).decode('utf-8', errors='ignore')
+        
+        # 1. Delete <script>, <style>, and <head> blocks entirely
+        clean_html = re.sub(r'<(script|style|noscript|svg|head)\b[^>]*>.*?</\1>', ' ', raw_html, flags=re.DOTALL|re.IGNORECASE)
+        
+        # 2. Strip all remaining HTML tags (leaving only plain text)
+        text_only = re.sub(r'<[^>]+>', ' ', clean_html)
+        
+        # 3. Decode HTML entities (like &amp; to &)
+        import html
+        text_only = html.unescape(text_only)
+        
+        return re.sub(r'\s+', ' ', text_only)
     except Exception:
         return ""
 
@@ -663,7 +677,7 @@ def main():
     parser.add_argument("--verify-installed", nargs="?", const="", default=None,
                         metavar="PATH",
                         help="Verify a binary against its GitHub signature")
-    parser.add_argument("-c", "--context", type=str)
+    parser.add_argument("-C", "--context", type=str)
     parser.add_argument("-l", "--length", type=str, default="6-12")
     parser.add_argument("-k", "--known", type=str, default="")
     parser.add_argument("-o", "--out", type=str, default="cripperx_payload.txt")
@@ -700,7 +714,7 @@ def main():
   {GREEN}--update{RESET}                      Download latest signed binary from GitHub
   {GREEN}--install-path PATH{RESET}           Override install location for --update
   {GREEN}--verify-installed [PATH]{RESET}     Verify a binary (default: installed 'cripper')
-  {GREEN}-c, --context{RESET}                 Context words (comma separated)
+  {GREEN}-C, --context{RESET}                 Context words (comma separated)
   {GREEN}-l, --length{RESET}                  Exact length (8) or Range (6-12); max {MAX_PASSWORD_LEN}
   {GREEN}-k, --known{RESET}                   Known characters (e.g. @,9)
   {GREEN}-o, --out{RESET}                     Output filename
@@ -713,7 +727,7 @@ def main():
 
 {WHITE}EXAMPLES:{RESET}
   {GRAY}# Fast generation with GUI{RESET}
-  cripper -c yam,egg -l 6 --gui
+  cripper -C yam,egg -l 6 --gui
 
   {GRAY}# OSINT Scrape{RESET}
   cripper --osint https://github.com/torvalds -l 8 --gui
@@ -958,7 +972,7 @@ def main():
             )
             os.close(fd)
             if args.gzip:
-                out_f = gzip.open(tmp_path, 'wt', encoding='utf-8', buffering=1 << 20)
+                out_f = gzip.open(tmp_path, 'wt', encoding='utf-8')
             else:
                 out_f = open(tmp_path, 'w', encoding='utf-8', buffering=1 << 20)
         except Exception as e:

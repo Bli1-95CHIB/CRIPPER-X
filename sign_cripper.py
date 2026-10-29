@@ -320,7 +320,7 @@ def main():
         env.setdefault("SOURCE_DATE_EPOCH", str(int(SRC_FILE.stat().st_mtime)))
 
     compile_cmd = [
-        sys.executable, "-m", "nuitka",
+        "nuitka",
         "--onefile", "--lto=yes",
         "--assume-yes-for-downloads",
         "--output-filename=cripper",
